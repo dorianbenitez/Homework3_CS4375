@@ -1,0 +1,216 @@
+---
+Title: "Homework 3"
+Name: Dorian Benitez (drb160130)
+Course: CS 4375.001
+
+Description: 
+The purpose of this file is to satisfy the requirements for Assignment 3 of the Introduction to Machine Learning course. The following document executes Logistic Regression and Naive Bayes operations of the BreastCancer data set, which is a part of the package "mlbench".
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# STEP 1
+
+1a.) There are 699 instances in BreastCancer
+1b.) "Class" is the target column
+1c.) There are 9 predictors and they are int data types 
+1d.) Percentage of malignant observations is: 34.4778254649499%
+
+```{r step1}
+library(mlbench)
+?BreastCancer
+data(BreastCancer)
+str(BreastCancer)
+head(BreastCancer)
+summary(BreastCancer$Class)
+malSum <- sum(BreastCancer$Class == "malignant")
+tRows <- nrow(BreastCancer)
+print(paste("Percentage of malignant observations: ", malSum / tRows * 100))
+```
+
+
+# STEP 2
+
+This error is occuring because the model is predicting absolute probabilities like 0 and 1. To fix this issue, we can penalize the regression/likelihood.
+
+Reference: https://stats.stackexchange.com/questions/11109/how-to-deal-with-perfect-separation-in-logistic-regression
+
+```{r step2}
+glm0 <- glm(formula = Class ~ Cell.size + Cell.shape, family = binomial, data = BreastCancer)
+summary(glm0)
+```
+
+
+# STEP 3
+
+The distribution of the new columns will assist us in determining the number of small and regular sized cells in the data. Although this may not be very useful in this particular instance of usage, we can utilize the new columns later to enhance our evaulation of the data. 
+
+```{r step3}
+BreastCancer$Cell.small <- as.factor(ifelse(BreastCancer$Cell.size ==1,1,0))
+BreastCancer$Cell.regular <-as.factor(ifelse(BreastCancer$Cell.shape ==1,1,0))
+summary(BreastCancer$Cell.size)
+summary(BreastCancer$Cell.shape)
+summary(BreastCancer$Cell.small)
+summary(BreastCancer$Cell.regular)
+```
+
+
+# STEP 4
+
+For this plot, the larger sized cells seem to be more malignant, while smaller cells are more benign. A similar observation can be made with cell shape, as greater shaped are more malignant while lesser shaped cells are more benign. I believe the cutoff points for this graph are justified as there is enough information provided based upon the graph.
+
+```{r step4}
+attach(BreastCancer)
+par(mfrow=c(1,2))
+cdplot(Class ~ Cell.size, main="Cell size")
+cdplot(Class ~ Cell.shape, main="Cell shape")
+```
+
+
+# STEP 5
+
+5a.) Small observations that are malignant: 1.04166666666667
+
+5b.) Not-small obervations that are malignant: 75.2380952380952
+
+5c.) Regular observations that are malignant: 0.56657223796034
+
+5d.) Not-regular observations that are malignant: 69.0751445086705
+
+This information shows that there are more small observations that are malignant than regular observations that are malignant. 
+
+```{r step5}
+plot(Class~Cell.small)
+plot(Class~Cell.regular)
+par(mfrow=c(1,2))
+cdplot(Class~Cell.small)
+cdplot(Class~Cell.regular)
+
+smallSum <- sum(Cell.small == 1)
+nsSum <- sum(Cell.small == 0)
+regSum <- sum(Cell.regular == 1)
+nrSum <- sum(Cell.regular == 0)
+
+sMal <- sum(Cell.small == 1 & Class == "malignant")
+nsMal <- sum(Cell.small == 0 & Class == "malignant")
+rMal <- sum(Cell.regular == 1 & Class == "malignant")
+nrMal <- sum(Cell.regular == 0 & Class == "malignant")
+
+print(paste("Small & Malignant:", sMal / smallSum * 100))
+print(paste("Not-small & Malignant:", nsMal / nsSum * 100 ))
+print(paste("Regular & Malignant:", rMal / regSum * 100))
+print(paste("Not-regular & Malignant: ", nrMal / nrSum * 100))
+```
+
+
+# STEP 6
+
+```{r step6}
+set.seed(1234)
+i <- sample(1:nrow(BreastCancer), 0.80 * nrow(BreastCancer), replace=FALSE)
+train <- BreastCancer[i,]
+test <- BreastCancer[-i,]
+```
+
+
+
+# STEP 7
+
+7a.) Cell.small and Cell.regular both seem to be good predictors due to them have very low p-values. 
+
+7b.) The null deviance shows how well the response is predicted by the model by only using the intercept value. The residual deviance shows hows well the response is predicted by the model when predictors are included. 
+
+7c.) The AIC is very useful when comparing between models. It does not favor complex models as it is based upon deviance, and the lower an AIC value, the better. 
+
+```{r step7}
+glm1 <- glm(Class ~ Cell.small + Cell.regular, data = train, family = "binomial")
+summary(glm1)
+```
+
+
+# STEP 8
+
+The model's accuracy is .8857. 
+
+The mis-classifications were more False-Negatives than False-Positives.  
+
+```{r step8}
+prob <- predict(glm1, newdata = test, type="response")
+pred <- ifelse (prob > 0.5, 2, 1)
+acc <- mean(pred == as.integer(test$Class))
+print(paste("Accuracy of glm1: ", acc))
+
+library(caret)
+preds <- factor(ifelse(prob > 0.5, "malignant", "benign"))
+confusionMatrix(preds, reference = test$Class)
+```
+
+
+# STEP 9
+
+9a.) The coefficient of Cell.small is  -4.68299863950648
+
+9b.) The coefficient of Cell.small is a negative value, meaning that there exists a negative correlation between Cell.small and the chance of BreastCancer being malignant.
+
+9c.) Estimated probability of malignancy if Cell.small is true: 0.00916643
+
+9d.) Probability of malignancy if Cell.small is true over the whole BreastCancer data set: 0.01728389 
+
+These values are not very close, as the probability greatly increases when compared over the entire BreastCancer data set. 
+
+```{r step9}
+coEF1 <- glm1$coefficients[2]
+print(paste("Cell.small coefficient: ", coEF1))
+
+nine_c <- exp(coEF1)/(1+exp(coEF1))
+print(paste("Est. prob. of malignancy if Cell.small is true: ", nine_c))
+
+glm2 <- glm(Class~Cell.small+Cell.regular, data=BreastCancer, family="binomial")
+coEF2 <- glm2$coefficients[2]
+nine_d <- exp(coEF2)/(1+exp(coEF2))
+print(paste("Prob. of malignancy if Cell.small is true over BreastCancer: ", nine_d))
+```
+
+
+# STEP 10
+
+The AIC scores are better when their value is smaller. In order for this to execute properly, AIC requires the log-likelihood to be maximized so it can be used to models that are not fitted by max. likelihood. When viewing this, glm1 has the best AIC, then glm_small, then glm_regular.
+
+```{r step10}
+glm_small <- glm(Class~Cell.small, data=train, family="binomial")
+glm_regular <- glm(Class~Cell.regular, data=train, family="binomial")
+anova(glm_small, glm_regular, glm1)
+AIC(glm_small, glm_regular, glm1)
+```
+
+
+# STEP 11
+
+11a.) The percentage of training data that is benign is: 65.29517%
+11b.) The likelihood that a malignant sample is not small is: 98.969072%
+11c.) The likelihood that a malignant sample is not regular is: 98.969072%
+
+```{r step11}
+library(e1071)
+nb1 <- naiveBayes(formula = Class ~ Cell.small + Cell.regular, data=train)
+nb1
+```
+
+
+# STEP 12
+
+The results for both models are the same. I belive this is the case because the data utilized is a good fit for both Naive Bayes and Logistic Regression models, and satisfies them both equally. 
+
+```{r step12}
+raw <- predict(nb1, newdata=test, type="raw")
+pred2 <- predict(nb1, newdata=test, type="class")
+confusionMatrix(pred2, test$Class)
+```
+
+
+
+
+
